@@ -1,0 +1,75 @@
+version: "3.9"
+
+
+services:
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    command: python3 -m bot
+    env_file:
+      - ./bot/.env
+    environment:
+      - BOT_TOKEN=6003159:AAHJf2fCnz_LS-L82So
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  api: &api
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    env_file:
+      - ./api/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  taskiq:
+    <<: *api
+    build:
+      context: ./api
+      dockerfile: Dockerfile.taskiq
+
+  postgres:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=db
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U user -d db'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - "pg-data:/var/lib/postgresql/data"
+
+  redis:
+    image: redis:7.4.0
+    ports:
+      - "6379:6379"
+    restart: always
+    environment:
+      ALLOW_EMPTY_PASSWORD: yes
+    healthcheck:
+      test: redis-cli ping
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - "redis_data:/data"
+
+volumes:
+  pg-data:
+  redis_data:
